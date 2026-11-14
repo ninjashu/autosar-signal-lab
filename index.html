@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AUTOSAR Signal Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a test bench. Lesson and live stage on the left, the three ways to change settings and the trace on the right, a recorder strip along the bottom. */
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --soft:#e3e9ee; --ink:#16232e; --muted:#5b6b78; --line:#cfd7de;
+  --accent:#c2570c; --accent2:#0f6e7a; --good:#2f7d4f; --warn:#9a6a00; --bad:#b3261e;
+  --display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#10181f; --panel:#18232c; --soft:#22313b; --ink:#e4ecf2; --muted:#93a4b1; --line:#2f3e4a;
+    --accent:#f0913f; --accent2:#4fc1cf; --good:#5cc98a; --warn:#e0b040; --bad:#f0685f; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10181f; --panel:#18232c; --soft:#22313b; --ink:#e4ecf2; --muted:#93a4b1; --line:#2f3e4a;
+  --accent:#f0913f; --accent2:#4fc1cf; --good:#5cc98a; --warn:#e0b040; --bad:#f0685f; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);padding-bottom:86px}
+body.static{padding-bottom:24px}
+h1,h2,h3,h4{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:.01em}
+code,.mono{font-family:var(--mono);font-size:.82em}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 10px}
+button:hover{border-color:var(--accent2)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:24px}
+header h1 span{color:var(--accent)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 14px;font-weight:600}
+.seg button.on{background:var(--accent2);color:var(--panel)}
+.levels{display:flex;flex-wrap:wrap;gap:6px}
+.levels button{font-size:13px}
+.levels button.on{border-color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent);font-weight:600}
+main{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:16px;padding:16px 20px;max-width:1400px;margin:0 auto}
+body.static main{grid-template-columns:minmax(0,1fr)}
+body.static .side,body.static .transport{display:none}
+@media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.left{display:flex;flex-direction:column;gap:16px;min-width:0}
+.lesson h2{font-size:22px;margin-bottom:4px}
+.lesson p{margin:6px 0;max-width:70ch}
+.lesson ul{margin:6px 0 0;padding-left:18px;max-width:75ch}
+.lesson li{margin:3px 0}
+.lesson .tag{font:600 11px var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+.note{color:var(--muted);font-size:13px}
+.stage{overflow-x:auto}
+/* module stacks */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row3{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:14px}
+@media (max-width:640px){.row2,.row3{grid-template-columns:1fr}}
+.ecu{display:flex;flex-direction:column;gap:5px;min-width:0}
+.ecu h4{font-size:16px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ecu h4 small{font:400 12px var(--body);color:var(--muted)}
+.mod{position:relative;display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;align-items:center;background:var(--soft);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:6px;padding:6px 8px;min-height:40px}
+.mod b{font-weight:600;font-size:14px}
+.mod code{color:var(--muted);overflow-wrap:anywhere}
+.mod .val{font:600 12px var(--mono);color:var(--accent2);text-align:right}
+.mod .tok{grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap}
+.mod.on{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--soft))}
+.bus{margin-top:10px;border-left-color:var(--accent2)}
+.chip{display:inline-block;font:600 11px var(--mono);font-style:normal;background:var(--accent);color:var(--panel);border-radius:10px;padding:1px 8px;white-space:nowrap}
+.chip.bad{background:var(--bad)}
+.chip.alt{background:var(--accent2)}
+canvas{display:block;width:100%;height:150px;margin-top:12px;background:var(--soft);border:1px solid var(--line);border-radius:6px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:6px 0 0}
+.legend i{display:inline-block;width:14px;height:4px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.pill{display:inline-block;font:600 11px var(--mono);border-radius:10px;padding:1px 8px;border:1px solid currentColor;color:var(--muted);white-space:nowrap}
+.pill.good{color:var(--good)}.pill.warn{color:var(--warn)}.pill.bad{color:var(--bad)}.pill.act{color:var(--accent2)}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:4px 8px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13px;align-items:center}
+.kv dt{color:var(--muted)}.kv dd{margin:0;font-family:var(--mono);font-size:12px;overflow-wrap:anywhere}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.acts button{font:12px var(--mono);padding:4px 8px;text-align:left}
+.bits{display:flex;gap:3px;flex-wrap:wrap}
+.bits span{font:10px var(--mono);border:1px solid var(--line);border-radius:4px;padding:2px 4px;color:var(--muted)}
+.bits span.on{background:var(--bad);border-color:var(--bad);color:var(--panel)}
+.meter{height:8px;background:var(--soft);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent2);width:0}
+.meter.hot i{background:var(--bad)}
+/* network lane */
+.lane{position:relative;min-height:230px;border:1px dashed var(--line);border-radius:8px;background:repeating-linear-gradient(0deg,transparent 0 76px,var(--line) 76px 77px)}
+.lane .lab{position:absolute;left:6px;font:11px var(--mono);color:var(--muted)}
+.lane .chip{position:absolute;transform:translate(-50%,0)}
+.lane.down{border-color:var(--bad)}
+.q{display:flex;gap:3px}
+.q span{width:26px;height:22px;border:1px solid var(--line);border-radius:4px;font:11px var(--mono);display:grid;place-items:center;color:var(--muted)}
+.q span.f{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+/* processes */
+.procs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:10px}
+.proc{background:var(--soft);border:1px solid var(--line);border-top:4px solid var(--line);border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:4px}
+.proc.running{border-top-color:var(--good)}.proc.starting,.proc.terminating{border-top-color:var(--warn)}
+.proc b{font-family:var(--mono);font-size:13px}
+.proc small{color:var(--muted);font-size:11px}
+.fg{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+/* static maps */
+.layer{display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--soft)}
+.layer h4{font-size:14px;color:var(--muted)}
+.layer div{display:flex;flex-wrap:wrap;gap:6px}
+.layer button{font:600 12px var(--mono)}
+.layer button.on{background:var(--accent2);color:var(--panel);border-color:var(--accent2)}
+@media (max-width:560px){.layer{grid-template-columns:1fr}}
+.detail{margin-top:12px;border-left:4px solid var(--accent);padding:8px 12px;background:var(--soft);border-radius:0 8px 8px 0}
+.detail h3{font-size:18px}
+.detail p{margin:6px 0;max-width:75ch}
+/* side */
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.tabs{display:flex;gap:4px;margin-bottom:10px}
+.tabs button{flex:1;font-size:13px;padding:5px 4px}
+.tabs button.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.field{display:grid;grid-template-columns:1fr auto;gap:0 8px;margin-bottom:9px;font-size:13px}
+.field label{color:var(--muted)}
+.field output{font:600 12px var(--mono)}
+.field input[type=range],.field select{grid-column:1/-1;width:100%;accent-color:var(--accent2)}
+.field select{padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.field.chk{grid-template-columns:auto 1fr;align-items:center}
+.field.chk input{accent-color:var(--bad)}
+textarea{width:100%;min-height:230px;font:12px/1.45 var(--mono);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:8px;resize:vertical}
+#cmd{width:100%;font:13px var(--mono);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:7px}
+.apis{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.apis button{font:12px var(--mono);text-align:left;overflow-wrap:anywhere}
+.msg{font-size:12px;margin:6px 0 0;min-height:18px}
+.msg.err{color:var(--bad)}.msg.ok{color:var(--good)}
+.trace h3{font-size:16px;margin-bottom:6px}
+.trace ol{list-style:none;margin:0;padding:0;max-height:330px;overflow:auto;font:12px/1.45 var(--mono)}
+.trace li{padding:2px 0 2px 8px;border-left:3px solid var(--line);margin-bottom:2px;overflow-wrap:anywhere}
+.trace li time{color:var(--muted);margin-right:6px}
+.trace li.api{border-left-color:var(--accent2)}.trace li.warn{border-left-color:var(--warn)}.trace li.err{border-left-color:var(--bad);color:var(--bad)}
+/* transport */
+.transport{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:8px 20px;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;z-index:5}
+.transport input[type=range]{flex:1;min-width:140px;accent-color:var(--accent)}
+.transport .t{font:600 13px var(--mono);min-width:92px;font-variant-numeric:tabular-nums}
+.transport select{padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+#bRun.on{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>AUTOSAR <span>Signal Lab</span></h1>
+  <div class="seg" id="plat" role="group" aria-label="Platform">
+    <button id="pClassic" data-p="classic">Classic</button><button id="pAdaptive" data-p="adaptive">Adaptive</button>
+  </div>
+  <nav class="levels" id="levels" aria-label="Levels"></nav>
+</header>
+<main>
+  <div class="left">
+    <section class="card lesson" id="lesson"></section>
+    <section class="card stage" id="stage"></section>
+  </div>
+  <aside class="side">
+    <section class="card">
+      <div class="tabs" role="group" aria-label="Ways to change settings">
+        <button id="tabCtl" data-t="ctl">Controls</button><button id="tabCfg" data-t="cfg">Config file</button><button id="tabApi" data-t="api">API console</button>
+      </div>
+      <div id="paneCtl"></div>
+      <div id="paneCfg" hidden>
+        <p class="note" id="cfgNote"></p>
+        <textarea id="cfgText" spellcheck="false" aria-label="Configuration as JSON"></textarea>
+        <div class="acts"><button id="cfgApply">Apply config</button><button id="cfgReset">Restore defaults</button></div>
+        <p class="msg" id="cfgMsg"></p>
+      </div>
+      <div id="paneApi" hidden>
+        <p class="note">Type a call and press Enter, or pick one below. Buttons on the stage run the same calls.</p>
+        <input id="cmd" autocomplete="off" spellcheck="false" aria-label="API call" placeholder="Set(key, value)">
+        <p class="msg" id="cmdMsg"></p>
+        <div class="apis" id="apis"></div>
+      </div>
+    </section>
+    <section class="card trace">
+      <h3>Trace</h3>
+      <ol id="trace"></ol>
+    </section>
+  </aside>
+</main>
+<div class="transport">
+  <button id="bRun">Pause</button>
+  <button id="bBack" title="One step back">◀ Step</button>
+  <button id="bFwd" title="One step forward">Step ▶</button>
+  <button id="bReplay">Replay recording</button>
+  <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Position in the recording">
+  <span class="t" id="tLab">0.00 s</span>
+  <span class="pill" id="badge">LIVE</span>
+  <label class="note" for="speed">Speed</label>
+  <select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+  <button id="bReset">Reset level</button>
+</div>
+<script>
+"use strict";
+const clone=o=>JSON.parse(JSON.stringify(o));
+const hex=b=>b.map(x=>(x&255).toString(16).toUpperCase().padStart(2,'0')).join(' ');
+function stack(p,title,sub,mods){
+  return `<div class="ecu"><h4>${title}<small>${sub}</small></h4>`+mods.map(m=>
+    `<div class="mod" data-m="${p+m[0]}"><b>${m[1]}</b><code>${m[2]||''}</code><span class="val" data-r="${p+m[0]}"></span><span class="tok"></span></div>`).join('')+`</div>`;
+}
+function mapHtml(layers){
+  return layers.map(l=>`<div class="layer"><h4>${l[0]}</h4><div>${l[1].map(n=>`<button data-i="${n}">${n}</button>`).join('')}</div></div>`).join('')+
+    `<div class="detail" id="detail"></div>`;
+}
+
+/* ---------- static maps ---------- */
+const CLASSIC_LAYERS=[
+ ['Application layer',['SWC','Runnable']],
+ ['Runtime environment',['RTE']],
+ ['Services layer',['OS','COM','PduR','CanTp','Dcm','Dem','NvM','EcuM','BswM','ComM']],
+ ['ECU abstraction layer',['CanIf','MemIf','IoHwAb']],
+ ['Microcontroller abstraction (MCAL)',['Can','Dio','Adc','Fls','Gpt','Mcu']],
+ ['Outside the layers',['Complex drivers']]];
+const CLASSIC_INFO={
+ SWC:['Software component. Holds application logic and nothing about the hardware. It talks only through ports, so the same component can move to another ECU.','Rte_Write_&lt;port&gt;_&lt;element&gt;(), Rte_Read_…(), Rte_Call_…()','classic-signal'],
+ Runnable:['A function inside a component that the RTE triggers, usually on a timer or when data arrives. Runnables are mapped onto OS tasks at configuration time.','Triggered by TimingEvent, DataReceivedEvent, OperationInvokedEvent','classic-os'],
+ RTE:['Generated glue code. It turns every port access into a direct call into COM, another component, or a service. Nothing in the RTE is written by hand.','Rte_Write, Rte_Read, Rte_Call, Rte_Switch','classic-signal'],
+ OS:['OSEK-based real-time operating system. Static tasks with fixed priorities, alarms, schedule tables, and memory and timing protection for safety.','ActivateTask(), TerminateTask(), SetEvent(), WaitEvent(), GetResource()','classic-os'],
+ COM:['Packs signals into I-PDUs and unpacks them. Decides when a PDU is sent (periodic, direct, mixed) and watches reception deadlines.','Com_SendSignal(), Com_ReceiveSignal(), Com_MainFunctionTx(), Com_RxIndication()','classic-signal'],
+ PduR:['PDU router. A static table that says which lower module each PDU goes to, and which upper module gets it on reception. It also does gateway routing between buses.','PduR_ComTransmit(), PduR_CanIfRxIndication(), PduR_CanTpRxIndication()','classic-signal'],
+ CanTp:['Transport protocol (ISO 15765-2). Splits messages longer than one CAN frame into segments and reassembles them. Diagnostics depends on it.','CanTp_Transmit(), CanTp_RxIndication(), CanTp_MainFunction()','classic-diag'],
+ Dcm:['Diagnostic communication manager. Implements the UDS services, sessions, security access and timing.','Dcm_TpRxIndication(), Dcm_MainFunction(), Dcm_GetSesCtrlType()','classic-diag'],
+ Dem:['Diagnostic event manager. Debounces fault reports from monitors and stores trouble codes with their status bytes and freeze frames.','Dem_SetEventStatus(), Dem_ClearDTC(), Dem_GetStatusOfDTC()','classic-diag'],
+ NvM:['Non-volatile memory manager. Blocks are read at startup and written at shutdown, with checksums and redundant copies.','NvM_ReadAll(), NvM_WriteAll(), NvM_WriteBlock()',null],
+ EcuM:['ECU state manager. Owns startup, shutdown, sleep and wake-up. It initialises the drivers and the OS, then hands over to BswM.','EcuM_Init(), EcuM_StartupTwo(), EcuM_GoDown()',null],
+ BswM:['Mode manager. A rule table: when a mode request or status changes, run an action list, such as starting PDU groups once the bus is up.','BswM_RequestMode(), BswM_MainFunction()',null],
+ ComM:['Communication manager. Collects requests from components for bus communication and keeps the bus awake only while someone needs it.','ComM_RequestComMode(), ComM_GetCurrentComMode()',null],
+ CanIf:['CAN interface. Maps PDU IDs to CAN IDs and hardware objects, and hides which CAN controller is used.','CanIf_Transmit(), CanIf_RxIndication(), CanIf_TxConfirmation()','classic-signal'],
+ MemIf:['Memory abstraction interface. Lets NvM use flash-emulated EEPROM or real EEPROM through one API.','MemIf_Read(), MemIf_Write()',null],
+ IoHwAb:['I/O hardware abstraction. Turns raw pins and ADC counts into named signals such as a temperature in degrees.','Project-specific, called through RTE client-server ports',null],
+ Can:['CAN driver for one microcontroller family. Writes frames into hardware mailboxes and reports received ones.','Can_Write(), Can_MainFunction_Read(), Can_SetControllerMode()','classic-signal'],
+ Dio:['Digital I/O driver. Reads and writes single pins or groups.','Dio_ReadChannel(), Dio_WriteChannel()',null],
+ Adc:['Analogue-to-digital converter driver.','Adc_StartGroupConversion(), Adc_ReadGroup()',null],
+ Fls:['Internal flash driver, used below the memory stack.','Fls_Write(), Fls_Erase(), Fls_MainFunction()',null],
+ Gpt:['General-purpose timer driver. Feeds the OS counter and timeouts.','Gpt_StartTimer(), Gpt_EnableNotification()',null],
+ Mcu:['Clock, PLL, reset reason and low-power modes.','Mcu_InitClock(), Mcu_GetResetReason()',null],
+ 'Complex drivers':['Code that skips the layers because timing is too tight for them, such as injection control. It may touch hardware directly and still talk to the RTE.','Project-specific',null]};
+const ADAPTIVE_LAYERS=[
+ ['Adaptive applications',['Application process','Manifest']],
+ ['Communication',['ara::com','SOME/IP','Service discovery']],
+ ['Platform foundation',['ara::exec','ara::phm','ara::per','ara::log','ara::crypto','ara::iam','ara::tsync']],
+ ['Platform services',['State Management','ara::diag','ara::ucm','ara::nm']],
+ ['Operating system',['POSIX OS']],
+ ['Hardware',['High-performance computer']]];
+const ADAPTIVE_INFO={
+ 'Application process':['Each adaptive application is an ordinary operating-system process written in C++. It starts, stops and can be updated on its own.','ara::core::Initialize(), ara::exec::ExecutionClient','adaptive-exec'],
+ Manifest:['Configuration read when the machine starts, not compiled in. Execution manifests say when a process runs; service manifests bind services to the network.','JSON or ARXML files deployed with the application','adaptive-exec'],
+ 'ara::com':['Service-oriented communication. A provider offers a service through a skeleton; consumers use it through a proxy. Events, methods and fields.','OfferService(), StartFindService(), Subscribe(), GetNewSamples()','adaptive-com'],
+ 'SOME/IP':['The usual network binding for ara::com on Ethernet. Carries serialised events and method calls over UDP or TCP.','Message ID = service ID + method or event ID','adaptive-com'],
+ 'Service discovery':['SOME/IP-SD. Providers announce services with a time-to-live; consumers find them and subscribe to event groups at run time.','OfferService, FindService, SubscribeEventgroup, SubscribeEventgroupAck','adaptive-com'],
+ 'ara::exec':['Execution Management. Starts and stops processes in dependency order according to function group states.','ExecutionClient::ReportExecutionState(), StateClient::SetState()','adaptive-exec'],
+ 'ara::phm':['Platform Health Management. Supervises processes by checkpoints: alive, deadline and logical supervision.','SupervisedEntity::ReportCheckpoint()','adaptive-exec'],
+ 'ara::per':['Persistency. Key-value and file storage per process, with integrity protection.','OpenKeyValueStorage(), GetValue(), SetValue()',null],
+ 'ara::log':['Logging and tracing, normally in the DLT format.','CreateLogger(), LogInfo() &lt;&lt; …',null],
+ 'ara::crypto':['Keys, certificates and cryptographic operations behind a provider interface.','CryptoProvider, KeySlot',null],
+ 'ara::iam':['Identity and access management. Decides whether a process may use a service or resource.','Checked by the platform on service access',null],
+ 'ara::tsync':['Time synchronisation across ECUs.','SynchronizedTimeBaseConsumer::GetCurrentTime()',null],
+ 'State Management':['Project-specific process that decides the machine and function group states and asks Execution Management to apply them.','StateClient::SetState(), reacts to PHM and UCM','adaptive-exec'],
+ 'ara::diag':['Diagnostics over IP (UDS on DoIP), service-oriented rather than a single Dcm module.','Monitor::ReportMonitorAction(), DTC and event interfaces',null],
+ 'ara::ucm':['Update and configuration management. Installs, updates and removes software packages, the base for over-the-air updates.','TransferStart(), ProcessSwPackage(), Activate()',null],
+ 'ara::nm':['Network management. Coordinates when partial networks may sleep.','NetworkHandle fields',null],
+ 'POSIX OS':['A POSIX PSE51 operating system such as Linux or QNX. Applications may use only that subset, which keeps them portable.','pthread, clock_nanosleep, sockets through the platform only',null],
+ 'High-performance computer':['Multi-core processors with gigabytes of memory and Ethernet, often with a hypervisor that also hosts Classic ECUs as virtual machines.','No AUTOSAR API at this level',null]};
+
+/* ---------- helpers for levels ---------- */
+const STG=['A_COM','A_PduR','A_CanIf','A_Can','BUS','B_Can','B_CanIf','B_PduR','B_COM'];
+function c2tx(s,c,log,why){ s.seq++; s.fr.push({v:s.txBuf,st:0,ts:s.t}); log('api',`Com (${why}) → PduR_ComTransmit → CanIf_Transmit → Can_Write: Speed=${s.txBuf}`); }
+function c2write(s,c,log,v){ s.val=v; s.runT=s.t; const ch=v!==s.txBuf; s.txBuf=v;
+  if(c.txMode!=='PERIODIC'&&ch){ log('api',`Rte_Write_Speed(${v}) → Com_SendSignal: value changed, triggers a send`); c2tx(s,c,log,'direct'); } }
+const TK=['fast','ctrl','slow'], TN=['Task_Fast','Task_Ctrl','Task_Slow'];
+const NRC={0x11:'serviceNotSupported',0x12:'subFunctionNotSupported',0x13:'incorrectMessageLength',0x24:'requestSequenceError',0x31:'requestOutOfRange',0x33:'securityAccessDenied',0x35:'invalidKey',0x7F:'serviceNotSupportedInActiveSession'};
+const DPATH=['D_BUS','D_CanIf','D_CanTp','D_PduR','D_Dcm'];
+const VIN='DEMO0000000000001';
+function uds(s,c,log,b){
+  const sid=b[0], n=x=>[0x7F,sid,x];
+  if(s.session!==1) s.s3=c.s3;
+  switch(sid){
+   case 0x10: if(b[1]!==1&&b[1]!==3) return n(0x12);
+     s.session=b[1]; s.unlocked=false; s.seed=0; s.s3=c.s3; log('api',`Dcm: session = ${b[1]===3?'extended':'default'}; security locked again`); return [0x50,b[1],0x00,0x32,0x01,0xF4];
+   case 0x3E: return [0x7E,0x00];
+   case 0x22: { const d=(b[1]<<8)|b[2]; s.didT=s.t;
+     if(d===0xF190) return [0x62,0xF1,0x90,...VIN.split('').map(ch=>ch.charCodeAt(0))];
+     if(d===0x0100) return [0x62,0x01,0x00,s.limit]; return n(0x31); }
+   case 0x2E: { const d=(b[1]<<8)|b[2]; if(d!==0x0100) return n(0x31);
+     if(s.session!==3) return n(0x7F); if(!s.unlocked) return n(0x33); if(b.length<4) return n(0x13);
+     s.limit=b[3]; s.didT=s.t; log('api',`Dcm → Rte_Call: write DID 0x0100 = ${b[3]}`); return [0x6E,0x01,0x00]; }
+   case 0x27: if(s.session!==3) return n(0x7F);
+     if(b[1]===1){ s.seed=((s.t*7919+0x1234)&0xFFFF)||0x1234; return [0x67,0x01,s.seed>>8,s.seed&255]; }
+     if(b[1]===2){ if(!s.seed) return n(0x24); const k=((b[2]<<8)|b[3]); const ok=k===(s.seed^0xA5A5); s.seed=0;
+       if(!ok) return n(0x35); s.unlocked=true; log('api','Dcm: key accepted, security level unlocked'); return [0x67,0x02]; }
+     return n(0x12);
+   case 0x19: if(b[1]!==2) return n(0x12); s.demT=s.t; log('api','Dcm → Dem: read DTCs by status mask');
+     return [0x59,0x02,0xFF,...((s.dtc&(b[2]??0xFF))?[0x01,0x23,0x45,s.dtc]:[])];
+   case 0x14: s.dtc=0x50; s.cnt=0; s.demT=s.t; log('api','Dcm → Dem_ClearDTC(): status byte and debounce counter reset'); return [0x54];
+   default: return n(0x11);
+  }
+}
+function explain(r){ if(!r||!r.length) return ''; if(r[0]===0x7F) return `Negative response: ${NRC[r[2]]||'NRC 0x'+r[2].toString(16)}`; return 'Positive response (request SID + 0x40)'; }
+const PR=[
+ {n:'log_daemon',in:['Startup','Driving','Parking'],dep:[]},
+ {n:'com_daemon',in:['Startup','Driving','Parking'],dep:['log_daemon']},
+ {n:'radar_service',in:['Driving'],dep:['com_daemon']},
+ {n:'brake_assist',in:['Driving'],dep:['radar_service']},
+ {n:'park_assist',in:['Parking'],dep:['com_daemon']},
+ {n:'ota_client',in:['Parking'],dep:['com_daemon']}];
+const BA=3;
+function a2send(s,c,log,k,dir,n){ const lost=c.linkDown; s.msgs.push({k,dir,n:n??0,t0:s.t,lost}); if(lost){ s.netLost++; if(k!=='Ev') log('err',`Link down: ${k} lost on the network`);} }
+
+/* ---------- levels ---------- */
+const LEVELS=[
+{id:'classic-map',plat:'classic',name:'1 · Layer map',static:true,layers:CLASSIC_LAYERS,info:CLASSIC_INFO,first:'COM',
+ title:'The layered architecture',
+ intro:'A Classic ECU is one statically configured program. Every module, task and signal is fixed when the code is generated. Application components sit on top and never touch hardware; each layer below hides one more detail of the microcontroller.',
+ tries:['Click a module to see its job and the calls you will meet in code reviews.','Follow one signal downwards: SWC, RTE, COM, PduR, CanIf, Can. Level 2 animates that path.']},
+{id:'classic-signal',plat:'classic',name:'2 · Signal path',dt:20,rate:1000,
+ title:'One signal from sensor to dashboard',
+ intro:'ECU A measures wheel speed and ECU B displays it. The component only writes a value. COM decides when a frame leaves, and the receiver sees the value later and less often than it was written. Hop delays are stretched so you can watch them; on a real ECU they take microseconds.',
+ tries:['Set the COM cycle to 1000 ms. The orange line turns into a staircase: the receiver gets stale data.','Switch the transmission mode to DIRECT with a manual value. Frames stop when the value stops changing, and the receiver times out.','Tick the bus fault. After the reception timeout, COM replaces the value with 0.'],
+ def:{source:'SINE',manual:80,runPeriod:100,txMode:'PERIODIC',comCycle:200,rxPeriod:100,rxTimeout:1000,hop:80,busFault:false},
+ fields:[{k:'source',l:'Sensor value source',t:'s',o:['SINE','MANUAL']},{k:'manual',l:'Manual speed',t:'r',min:0,max:250,st:1,u:'km/h'},
+  {k:'runPeriod',l:'Sender runnable period',t:'r',min:20,max:500,st:20,u:'ms'},{k:'txMode',l:'COM transmission mode',t:'s',o:['PERIODIC','DIRECT','MIXED']},
+  {k:'comCycle',l:'COM cycle time',t:'r',min:60,max:1000,st:20,u:'ms'},{k:'rxPeriod',l:'Receiver runnable period',t:'r',min:20,max:500,st:20,u:'ms'},
+  {k:'rxTimeout',l:'Reception deadline',t:'r',min:200,max:3000,st:100,u:'ms'},{k:'hop',l:'Delay per module (slow motion)',t:'r',min:20,max:200,st:20,u:'ms'},
+  {k:'busFault',l:'Bus fault: frames are lost',t:'b'}],
+ html:()=>`<div class="row2">`+stack('A_','ECU A · sender','wheel speed sensor',[['SWC','SWC SpeedSensor','Rte_Write_Speed()'],['RTE','RTE','Com_SendSignal()'],['COM','COM','Com_MainFunctionTx()'],['PduR','PduR','PduR_ComTransmit()'],['CanIf','CanIf','CanIf_Transmit()'],['Can','Can driver','Can_Write()']])+
+  stack('B_','ECU B · receiver','instrument cluster',[['SWC','SWC Dashboard','Rte_Read_Speed()'],['RTE','RTE','Com_ReceiveSignal()'],['COM','COM','Com_RxIndication()'],['PduR','PduR','PduR_CanIfRxIndication()'],['CanIf','CanIf','CanIf_RxIndication()'],['Can','Can driver','receive interrupt']])+
+  `</div><div class="mod bus" data-m="BUS"><b>CAN bus</b><code>ID 0x1A0 · 2 bytes</code><span class="val" data-r="BUS"></span><span class="tok"></span></div>
+  <canvas data-c aria-label="Speed written by the sender and read by the receiver over the last 8 seconds"></canvas>
+  <p class="legend"><span><i style="background:var(--accent2)"></i>written by sender</span><span><i style="background:var(--accent)"></i>read by receiver</span><span>scale 0 to 250 km/h, last 8 s</span></p>
+  <p class="note">Each box shows the call that enters that module. Sender frames travel down, receiver frames travel up.</p>`,
+ init:c=>({t:0,val:0,txBuf:0,runT:-999,rxRunT:-999,nRun:0,nCom:0,nRx:0,fr:[],rxBuf:0,rxAge:0,to:false,app:0,sent:0,lost:0,seq:0}),
+ step(s,c,dt,log){ s.t+=dt;
+  if(s.t>=s.nRun){ s.nRun=s.t+c.runPeriod; c2write(s,c,log,c.source==='SINE'?Math.round(100+80*Math.sin(s.t/1400)):c.manual); }
+  if(c.txMode!=='DIRECT'&&s.t>=s.nCom){ s.nCom=s.t+c.comCycle; c2tx(s,c,log,'cyclic'); }
+  for(const f of s.fr){ if(s.t-f.ts<c.hop) continue; f.ts=s.t; f.st++;
+    if(f.lost||f.st>8){ f.dead=true; continue; }
+    if(f.st===4){ if(c.busFault){ f.lost=true; s.lost++; log('err',`Frame 0x1A0 [${f.v}] lost on the bus`);} else s.sent++; }
+    if(f.st===8){ if(s.to) log('info','COM: reception resumed, timeout cleared'); s.rxBuf=f.v; s.rxAge=0; s.to=false; log('api',`Can → CanIf_RxIndication → PduR → Com_RxIndication: Speed=${f.v}`); } }
+  s.fr=s.fr.filter(f=>!f.dead);
+  s.rxAge+=dt; if(!s.to&&s.rxAge>c.rxTimeout){ s.to=true; log('warn',`COM: no frame for ${c.rxTimeout} ms → reception deadline missed, signal replaced by its init value 0`); }
+  if(s.t>=s.nRx){ s.nRx=s.t+c.rxPeriod; s.app=s.to?0:s.rxBuf; s.rxRunT=s.t; } },
+ render(v,c,R,M,P){ const tk={}; v.fr.forEach(f=>{ const k=STG[f.st]; if(k) tk[k]=(tk[k]||'')+`<i class="chip${f.lost?' bad':''}">${f.v}</i>`; });
+  const on={A_SWC:v.t-v.runT<70,A_RTE:v.t-v.runT<70,B_SWC:v.t-v.rxRunT<70,B_RTE:v.t-v.rxRunT<70};
+  P(tk,on,{A_SWC:v.val+' km/h',A_COM:'buffer '+v.txBuf,B_COM:v.to?'TIMEOUT':'buffer '+v.rxBuf,B_SWC:v.app+' km/h',BUS:`${v.sent} sent · ${v.lost} lost`}); },
+ chart(g,w,h,hist,idx,col){ const n=400,a=Math.max(0,idx-n+1); g.strokeStyle=col.line; g.lineWidth=1; g.beginPath(); for(let y=1;y<5;y++){g.moveTo(0,h*y/5);g.lineTo(w,h*y/5);} g.stroke();
+  [['val',col.a2],['app',col.a]].forEach(([k,cl])=>{ g.strokeStyle=cl; g.lineWidth=2; g.beginPath(); for(let j=a;j<=idx;j++){ const x=(j-a)/(n-1)*w, y=h-4-hist[j][k]/250*(h-8); j===a?g.moveTo(x,y):g.lineTo(x,y);} g.stroke(); }); },
+ api:{'Rte_Write_Speed':{ex:'Rte_Write_Speed(120)',fn(s,c,log,a,set){ const v=Math.max(0,Math.min(250,+a[0]||0)); set('source','MANUAL'); set('manual',v); c2write(s,c,log,v); return 'written'; }},
+  'Com_TriggerIPDUSend':{ex:'Com_TriggerIPDUSend(0x12)',fn(s,c,log){ c2tx(s,c,log,'triggered'); return 'I-PDU sent now'; }}}},
+{id:'classic-os',plat:'classic',name:'3 · OS scheduling',dt:1,rate:100,unit:'ms',
+ title:'Fixed-priority scheduling',
+ intro:'Three periodic tasks share one core. The highest-priority ready task always runs. A long low-priority task is harmless when it can be preempted, and harmful when it cannot. Shown in slow motion: one second on screen is 100 ms on the ECU.',
+ tries:['Switch to NON-preemptive. Task_Slow now blocks Task_Fast and its worst response time jumps.','Raise Task_Slow execution time to 40 ms. Utilisation passes 100 % and activations are lost (E_OS_LIMIT).','Give Task_Slow the highest priority and watch the fast task miss deadlines.','Fire an interrupt and see every task pause.'],
+ def:{policy:'FULL',fast_period:5,fast_exec:1,fast_prio:3,ctrl_period:10,ctrl_exec:3,ctrl_prio:2,slow_period:50,slow_exec:12,slow_prio:1},
+ fields:[{k:'policy',l:'Scheduling policy',t:'s',o:['FULL','NON']},
+  {k:'fast_period',l:'Task_Fast period',t:'r',min:2,max:20,st:1,u:'ms'},{k:'fast_exec',l:'Task_Fast execution time',t:'r',min:1,max:10,st:1,u:'ms'},{k:'fast_prio',l:'Task_Fast priority',t:'r',min:1,max:9,st:1,u:''},
+  {k:'ctrl_period',l:'Task_Ctrl period',t:'r',min:5,max:50,st:1,u:'ms'},{k:'ctrl_exec',l:'Task_Ctrl execution time',t:'r',min:1,max:20,st:1,u:'ms'},{k:'ctrl_prio',l:'Task_Ctrl priority',t:'r',min:1,max:9,st:1,u:''},
+  {k:'slow_period',l:'Task_Slow period',t:'r',min:20,max:200,st:10,u:'ms'},{k:'slow_exec',l:'Task_Slow execution time',t:'r',min:1,max:60,st:1,u:'ms'},{k:'slow_prio',l:'Task_Slow priority',t:'r',min:1,max:9,st:1,u:''}],
+ html:()=>`<canvas data-c style="height:190px" aria-label="Timeline of which task ran in each millisecond over the last 240 ms"></canvas>
+  <p class="legend"><span><i style="background:var(--accent2)"></i>running</span><span><i style="background:var(--warn)"></i>ready, waiting for the CPU</span><span><i style="background:var(--bad)"></i>interrupt, or deadline missed</span><span>tick above a row = activation</span></p>
+  <table style="margin-top:10px"><thead><tr><th>Task</th><th>Runnables</th><th>Period</th><th>Exec</th><th>Prio</th><th>Worst response</th><th>Deadline misses</th><th>Lost activations</th></tr></thead><tbody>
+  ${TN.map((n,i)=>`<tr><td class="mono">${n}</td><td>${['ReadWheelSpeed','ControlLoop','UpdateDisplay, StoreNvM'][i]}</td><td data-r="p${i}"></td><td data-r="e${i}"></td><td data-r="pr${i}"></td><td data-r="wr${i}"></td><td data-r="ms${i}"></td><td data-r="ls${i}"></td></tr>`).join('')}</tbody></table>
+  <dl class="kv" style="margin-top:10px"><dt>Planned CPU load</dt><dd data-r="u"></dd><dt>Measured CPU load</dt><dd data-r="mu"></dd></dl>
+  <div class="acts"><button data-act="TriggerIsr(2)">TriggerIsr(2) · 2 ms interrupt</button><button data-act="ActivateTask(Task_Slow)">ActivateTask(Task_Slow)</button></div>`,
+ init:c=>({t:0,tk:TK.map(()=>({st:'idle',rem:0,next:0,rel:0,miss:0,lost:0,wr:0})),cur:-1,isr:0,isrOn:0,cells:[0,0,0],rel:[0,0,0],mis:[0,0,0],busy:0}),
+ step(s,c,dt,log){ s.t+=dt; s.rel=[0,0,0]; s.mis=[0,0,0];
+  TK.forEach((k,i)=>{ const T=s.tk[i]; if(s.t<T.next) return; T.next=s.t+c[k+'_period'];
+    if(T.st!=='idle'){ T.lost++; s.mis[i]=1; if(T.lost<3||T.lost%20===0) log('err',`ActivateTask(${TN[i]}) → E_OS_LIMIT: the previous job is still active, activation lost · ${T.lost} so far`); }
+    else{ T.st='ready'; T.rem=c[k+'_exec']; T.rel=s.t; s.rel[i]=1; } });
+  let run=-1; s.isrOn=0;
+  if(s.isr>0){ s.isr--; s.isrOn=1; }
+  else{ if(c.policy==='NON'&&s.cur>=0&&s.tk[s.cur].st!=='idle') run=s.cur;
+    else s.tk.forEach((T,i)=>{ if(T.st!=='idle'&&(run<0||c[TK[i]+'_prio']>c[TK[run]+'_prio'])) run=i; }); }
+  s.cells=s.tk.map((T,i)=>T.st==='idle'?0:(i===run?2:1));
+  if(run>=0||s.isrOn) s.busy++;
+  if(run>=0){ const T=s.tk[run]; T.rem--; s.cur=run;
+    if(T.rem<=0){ T.st='idle'; s.cur=-1; const r=s.t-T.rel+1; if(r>T.wr) T.wr=r;
+      if(r>c[TK[run]+'_period']){ T.miss++; s.mis[run]=1; if(T.miss<3||T.miss%20===0) log('warn',`${TN[run]} finished after ${r} ms, deadline was ${c[TK[run]+'_period']} ms · ${T.miss} misses so far`); } } } },
+ render(v,c,R,M,P){ const set=(k,x)=>{ if(R[k]&&R[k].textContent!==String(x)) R[k].textContent=x; };
+  let u=0; TK.forEach((k,i)=>{ const T=v.tk[i]; u+=c[k+'_exec']/c[k+'_period']; set('p'+i,c[k+'_period']+' ms'); set('e'+i,c[k+'_exec']+' ms'); set('pr'+i,c[k+'_prio']); set('wr'+i,T.wr+' ms'); set('ms'+i,T.miss); set('ls'+i,T.lost); });
+  set('u',Math.round(u*100)+' %'+(u>1?' · over 100 %, cannot be scheduled':'')); set('mu',v.t?Math.round(v.busy/v.t*100)+' %':'0 %'); },
+ chart(g,w,h,hist,idx,col){ const n=240,a=Math.max(0,idx-n+1),lx=78,rw=(w-lx)/n,rows=['Interrupt',...TN],rh=h/4;
+  g.font='11px monospace'; g.textBaseline='middle';
+  rows.forEach((r,i)=>{ g.fillStyle=col.muted; g.fillText(r,6,rh*i+rh/2); g.strokeStyle=col.line; g.beginPath(); g.moveTo(lx,rh*(i+1)-.5); g.lineTo(w,rh*(i+1)-.5); g.stroke(); });
+  for(let j=a;j<=idx;j++){ const s=hist[j],x=lx+(j-a)*rw; if(!s.cells) continue;
+    if(s.isrOn){ g.fillStyle=col.bad; g.fillRect(x,8,rw+.5,rh-14); }
+    for(let i=0;i<3;i++){ const y=rh*(i+1);
+      if(s.cells[i]===2){ g.fillStyle=col.a2; g.fillRect(x,y+8,rw+.5,rh-14); }
+      else if(s.cells[i]===1){ g.fillStyle=col.warn; g.fillRect(x,y+rh-12,rw+.5,6); }
+      if(s.rel[i]){ g.fillStyle=col.ink; g.fillRect(x,y+2,1.5,6); }
+      if(s.mis[i]){ g.fillStyle=col.bad; g.fillRect(x,y+2,2.5,rh-4); } } } },
+ api:{'TriggerIsr':{ex:'TriggerIsr(2)',fn(s,c,log,a){ const n=Math.max(1,Math.min(20,+a[0]||1)); s.isr+=n; log('warn',`Category 2 interrupt takes the CPU for ${n} ms`); return 'interrupt pending'; }},
+  'ActivateTask':{ex:'ActivateTask(Task_Slow)',fn(s,c,log,a){ const i=TN.indexOf(String(a[0])); if(i<0) throw Error('Unknown task. Use Task_Fast, Task_Ctrl or Task_Slow.');
+    const T=s.tk[i]; if(T.st!=='idle'){ T.lost++; log('err',`ActivateTask(${TN[i]}) → E_OS_LIMIT`); return 'E_OS_LIMIT'; }
+    T.st='ready'; T.rem=c[TK[i]+'_exec']; T.rel=s.t; log('api',`ActivateTask(${TN[i]}) → E_OK`); return 'E_OK'; }}}},
+{id:'classic-diag',plat:'classic',name:'4 · Diagnostics',dt:20,rate:1000,
+ title:'UDS requests, sessions and trouble codes',
+ intro:'A workshop tester talks to the ECU with UDS. Dcm answers the request, checks session and security, and asks Dem for stored faults. Dem does not store a fault on the first bad sample: a debounce counter must reach its threshold first.',
+ tries:['Write the limit (2E 01 00 50) in the default session, then after 10 03, then after unlocking with 27 01 and 27 02. Each refusal has its own response code.','Enter the extended session and wait. Without 3E 00 the S3 timer drops the ECU back to default.','Tick the sensor fault, watch the counter climb, then read the trouble codes with 19 02 FF.','Clear the codes while the fault is still present. The code comes back.'],
+ def:{hop:80,s3:5000,monPeriod:100,stepUp:16,stepDown:8,failThr:127,fault:false},
+ fields:[{k:'fault',l:'Sensor fault present',t:'b'},{k:'stepUp',l:'Debounce step when failing',t:'r',min:1,max:64,st:1,u:''},{k:'stepDown',l:'Debounce step when passing',t:'r',min:1,max:64,st:1,u:''},
+  {k:'failThr',l:'Failed threshold',t:'r',min:16,max:127,st:1,u:''},{k:'monPeriod',l:'Monitor period',t:'r',min:40,max:500,st:20,u:'ms'},
+  {k:'s3',l:'S3 session timeout',t:'r',min:1000,max:10000,st:500,u:'ms'},{k:'hop',l:'Delay per module (slow motion)',t:'r',min:20,max:200,st:20,u:'ms'}],
+ html:()=>`<div class="row3"><div class="ecu"><h4>Tester<small>sends on 0x7E0</small></h4>
+   <div class="acts" style="margin-top:0">${[['10 03','extended session'],['10 01','default session'],['3E 00','tester present'],['22 F1 90','read VIN'],['22 01 00','read limit'],['27 01','request seed'],['2E 01 00 50','write limit = 80'],['19 02 FF','read trouble codes'],['14 FF FF FF','clear trouble codes']].map(x=>`<button data-act="Tester_Send(${x[0]})">${x[0]} · ${x[1]}</button>`).join('')}
+   <button data-act="Tester_SendKey(1)">27 02 · send correct key</button><button data-act="Tester_SendKey(0)">27 02 · send wrong key</button></div>
+   <dl class="kv" style="margin-top:8px"><dt>Request</dt><dd data-r="req">none yet</dd><dt>Response</dt><dd data-r="res">none yet</dd><dt>Meaning</dt><dd data-r="mean"></dd></dl></div>`+
+  stack('D_','ECU diagnostic stack','request goes up, response comes down',[['App','SWC and Dem','Dem_SetEventStatus()'],['Dcm','Dcm','Dcm_TpRxIndication()'],['PduR','PduR','PduR_CanTpRxIndication()'],['CanTp','CanTp','CanTp_RxIndication()'],['CanIf','CanIf','CanIf_RxIndication()'],['BUS','CAN bus','0x7E0 request · 0x7E8 response']])+
+  `<div class="ecu"><h4>ECU state</h4><dl class="kv"><dt>Session</dt><dd><span class="pill" data-r="ses"></span></dd><dt>Security</dt><dd><span class="pill" data-r="sec"></span></dd>
+   <dt>S3 timer</dt><dd><div class="meter"><i data-r="s3"></i></div></dd><dt>Limit (DID 0100)</dt><dd data-r="lim"></dd>
+   <dt>Debounce</dt><dd><div class="meter" data-r="cntm"><i data-r="cnt"></i></div><span data-r="cntv"></span></dd><dt>DTC 0x012345</dt><dd data-r="dtcv"></dd></dl>
+   <div class="bits" data-r="bits" style="margin-top:6px"></div>
+   <p class="note">The seed and key algorithm here is a toy (key = seed XOR A5A5). Real ECUs use secret or cryptographic algorithms.</p></div></div>`,
+ init:c=>({t:0,session:1,unlocked:false,seed:0,s3:0,cnt:0,dtc:0x50,nMon:0,ms:[],req:null,res:null,limit:120,demT:-999,didT:-999}),
+ step(s,c,dt,log){ s.t+=dt;
+  if(s.t>=s.nMon){ s.nMon=s.t+c.monPeriod; s.cnt=c.fault?Math.min(c.failThr,s.cnt+c.stepUp):Math.max(-128,s.cnt-c.stepDown);
+    if(s.cnt>=c.failThr&&!(s.dtc&1)){ s.dtc=(s.dtc|0x2F)&~0x50; s.demT=s.t; log('warn',`Dem_SetEventStatus(SpeedSensor, PREFAILED): counter reached +${c.failThr} → FAILED, DTC 0x012345 stored`); }
+    else if(s.cnt<=-128&&(s.dtc&0x51)){ const f=s.dtc&1; s.dtc&=~0x51; s.demT=s.t; log('info',f?'Dem: counter reached −128 → PASSED, testFailed bit cleared, the code stays confirmed':'Dem: counter reached −128 → PASSED, the test has now completed with no fault'); } }
+  if(s.session!==1){ s.s3-=dt; if(s.s3<=0){ s.session=1; s.unlocked=false; s.seed=0; log('warn','Dcm: S3 timer expired without a request → back to default session, security locked'); } }
+  for(const m of s.ms){ if(s.t-m.ts<c.hop) continue; m.ts=s.t;
+    if(!m.res){ if(m.st<4) m.st++; else { const r=uds(s,c,log,m.b); log('api',`Dcm: request ${hex(m.b)} → response ${hex(r.slice(0,8))}${r.length>8?' …':''}`); m.b=r; m.res=true; } }
+    else{ m.st--; if(m.st<0){ m.dead=true; s.res=m.b; } } }
+  s.ms=s.ms.filter(m=>!m.dead); },
+ render(v,c,R,M,P){ const tk={}; v.ms.forEach(m=>{ const k=DPATH[m.st]; if(k) tk[k]=(tk[k]||'')+`<i class="chip${m.res?' alt':''}">${hex(m.b.slice(0,4))}${m.b.length>4?' …':''}</i>`; });
+  P(tk,{D_App:v.t-v.demT<300||v.t-v.didT<300},{});
+  const set=(k,x)=>{ if(R[k]&&R[k].textContent!==String(x)) R[k].textContent=x; }, cls=(k,x)=>{ if(R[k]&&R[k].className!==x) R[k].className=x; };
+  set('req',v.req?hex(v.req):'none yet'); set('res',v.res?hex(v.res.slice(0,10))+(v.res.length>10?' …':''):'none yet'); set('mean',explain(v.res));
+  set('ses',v.session===3?'EXTENDED (0x03)':'DEFAULT (0x01)'); cls('ses','pill '+(v.session===3?'act':''));
+  set('sec',v.unlocked?'UNLOCKED':'LOCKED'); cls('sec','pill '+(v.unlocked?'good':'')); R.s3.style.width=(v.session===3?Math.max(0,v.s3/c.s3*100):0)+'%';
+  set('lim',v.limit+' km/h'); R.cnt.style.width=Math.max(0,(v.cnt+128)/(c.failThr+128)*100)+'%'; cls('cntm','meter'+(v.cnt>=c.failThr?' hot':'')); set('cntv',`${v.cnt} of +${c.failThr}`);
+  set('dtcv','status 0x'+v.dtc.toString(16).toUpperCase().padStart(2,'0'));
+  const names=['testFailed','failedThisCycle','pending','confirmed','notCompletedSinceClear','failedSinceClear','notCompletedThisCycle','warningIndicator'];
+  const bh=names.map((n,i)=>`<span class="${v.dtc>>i&1?'on':''}">${i} ${n}</span>`).join(''); if(R.bits.innerHTML!==bh) R.bits.innerHTML=bh; },
+ api:{'Tester_Send':{ex:'Tester_Send(22 F1 90)',raw:true,fn(s,c,log,raw){ const b=raw.split(/[\s,]+/).filter(Boolean).map(x=>parseInt(x.replace(/^0x/i,''),16));
+    if(!b.length||b.some(x=>isNaN(x)||x<0||x>255)) throw Error('Give hex bytes, for example Tester_Send(22 F1 90).');
+    s.req=b; s.res=null; s.ms.push({b,st:0,ts:s.t,res:false}); log('api',`Tester → 0x7E0: ${hex(b)}`); return 'request sent'; }},
+  'Tester_SendKey':{ex:'Tester_SendKey(1)',fn(s,c,log,a){ const k=(+a[0]?s.seed^0xA5A5:0x0000)&0xFFFF, b=[0x27,0x02,k>>8,k&255]; s.req=b; s.res=null; s.ms.push({b,st:0,ts:s.t,res:false}); log('api',`Tester → 0x7E0: ${hex(b)}`); return 'key sent'; }}}},
+{id:'adaptive-map',plat:'adaptive',name:'1 · Platform map',static:true,layers:ADAPTIVE_LAYERS,info:ADAPTIVE_INFO,first:'ara::com',
+ title:'The Adaptive Platform',
+ intro:'Adaptive AUTOSAR runs on powerful computers with a POSIX operating system. Applications are separate C++ processes that find each other at run time through services, and can be installed or updated without rebuilding the whole ECU. It complements Classic; it does not replace it.',
+ tries:['Click a block to see what it does and its typical calls.','Compare with the Classic map: no RTE and no static signal routing. Services and processes take their place.']},
+{id:'adaptive-com',plat:'adaptive',name:'2 · Services',dt:20,rate:1000,
+ title:'Service discovery, events and methods',
+ intro:'RadarService offers a service; BrakeAssist finds it, subscribes to an event and calls a method. Nothing is wired at build time. The provider announces itself with a time-to-live, and when announcements stop the consumer treats the service as gone.',
+ tries:['Tick the link fault and wait for the time-to-live to run out. Untick it and watch the consumer find the service and subscribe again.','Switch the consumer to POLL with a 1000 ms poll period and a sample limit of 2. Old samples are dropped.','Call proxy.Calibrate() and watch the future resolve after the method time. Then stop the offer and call it again.'],
+ def:{offerCycle:1000,ttl:3000,eventPeriod:200,netLatency:140,maxSamples:4,procMode:'EVENT',pollPeriod:500,methodTime:300,linkDown:false},
+ fields:[{k:'linkDown',l:'Link fault: Ethernet is down',t:'b'},{k:'offerCycle',l:'Cyclic offer delay',t:'r',min:200,max:3000,st:100,u:'ms'},{k:'ttl',l:'Offer time-to-live',t:'r',min:500,max:6000,st:100,u:'ms'},
+  {k:'eventPeriod',l:'Event send period',t:'r',min:60,max:1000,st:20,u:'ms'},{k:'netLatency',l:'Network latency (slow motion)',t:'r',min:40,max:400,st:20,u:'ms'},
+  {k:'procMode',l:'Consumer receives by',t:'s',o:['EVENT','POLL']},{k:'pollPeriod',l:'Poll period',t:'r',min:100,max:2000,st:100,u:'ms'},
+  {k:'maxSamples',l:'maxSampleCount',t:'r',min:1,max:8,st:1,u:''},{k:'methodTime',l:'Method processing time',t:'r',min:20,max:1000,st:20,u:'ms'}],
+ html:()=>`<div class="row3"><div class="ecu"><h4>RadarService<small>provider · skeleton</small></h4>
+   <dl class="kv"><dt>Offer</dt><dd><span class="pill" data-r="off"></span></dd><dt>Subscribers</dt><dd data-r="subs"></dd><dt>Events sent</dt><dd data-r="evn"></dd><dt>Calls in work</dt><dd data-r="pend"></dd></dl>
+   <div class="acts"><button data-act="skeleton.OfferService()">skeleton.OfferService()</button><button data-act="skeleton.StopOfferService()">skeleton.StopOfferService()</button></div></div>
+  <div class="lane" data-r="lane"><span class="lab" style="top:4px">service discovery</span><span class="lab" style="top:81px">events</span><span class="lab" style="top:158px">method call</span><div data-r="chips"></div></div>
+  <div class="ecu"><h4>BrakeAssist<small>consumer · proxy</small></h4>
+   <dl class="kv"><dt>Service</dt><dd><span class="pill" data-r="av"></span></dd><dt>Subscription</dt><dd><span class="pill" data-r="ss"></span></dd><dt>Sample queue</dt><dd><div class="q" data-r="q"></div></dd>
+   <dt>Last processed</dt><dd data-r="last"></dd><dt>Dropped</dt><dd data-r="drop"></dd><dt>Calibrate()</dt><dd><span class="pill" data-r="fut"></span></dd></dl>
+   <div class="acts"><button data-act="proxy.Subscribe(4)">proxy.Subscribe(4)</button><button data-act="proxy.Unsubscribe()">proxy.Unsubscribe()</button><button data-act="proxy.Calibrate()">proxy.Calibrate()</button></div></div></div>
+  <p class="note">Simplified: real SOME/IP-SD also has initial-wait and repetition phases before the cyclic offers, and subscriptions carry their own time-to-live.</p>`,
+ init:c=>({t:0,offered:true,nOffer:0,subs:false,ev:0,nEv:0,msgs:[],avail:false,until:0,want:true,sub:'none',q:[],last:0,drop:0,nPoll:0,fut:'idle',pend:[],netLost:0,rid:0}),
+ step(s,c,dt,log){ s.t+=dt;
+  if(s.offered&&s.t>=s.nOffer){ s.nOffer=s.t+c.offerCycle; a2send(s,c,log,'Offer',1); }
+  if(s.offered&&s.subs&&s.t>=s.nEv){ s.nEv=s.t+c.eventPeriod; s.ev++; a2send(s,c,log,'Ev',1,s.ev); }
+  s.pend=s.pend.filter(p=>{ if(s.t<p.due) return true; log('api',`skeleton: Calibrate() handler done → promise.set_value()`); a2send(s,c,log,'Resp',-1,p.id); return false; });
+  for(const m of s.msgs){ const p=(s.t-m.t0)/c.netLatency; if(m.lost){ if(p>=.5) m.dead=true; continue; } if(p<1) continue; m.dead=true;
+    switch(m.k){
+     case 'Offer': if(!s.avail) log('api','proxy: OfferService received → FindServiceHandler called, service available'); s.avail=true; s.until=s.t+c.ttl;
+       if(s.want&&s.sub==='none'){ s.sub='pending'; a2send(s,c,log,'Sub',-1); log('api','proxy: event.Subscribe() → SubscribeEventgroup'); } break;
+     case 'StopOffer': s.avail=false; s.sub='none'; s.q=[]; log('warn','proxy: StopOfferService received → service unavailable'); break;
+     case 'Sub': if(s.offered){ s.subs=true; s.nEv=s.t+c.eventPeriod; a2send(s,c,log,'Ack',1); log('api','skeleton: subscription accepted → SubscribeEventgroupAck'); } break;
+     case 'Ack': s.sub='ok'; log('info','proxy: subscription state = kSubscribed'); break;
+     case 'Unsub': s.subs=false; break;
+     case 'Ev': if(s.sub!=='ok') break;
+       if(c.procMode==='EVENT'){ s.last=m.n; s.q=[]; }
+       else{ s.q.push(m.n); while(s.q.length>c.maxSamples){ s.q.shift(); s.drop++; if(s.drop===1||s.drop%10===0) log('warn',`proxy: sample queue full (maxSampleCount ${c.maxSamples}), oldest sample dropped · ${s.drop} so far`); } } break;
+     case 'Req': s.pend.push({due:s.t+c.methodTime,id:m.n}); log('api','skeleton: Calibrate() request received, handler starts'); break;
+     case 'Resp': if(s.fut==='pending'){ s.fut='ready'; log('api','proxy: response received → future is ready, .then() continuation runs'); } break; } }
+  s.msgs=s.msgs.filter(m=>!m.dead);
+  if(s.avail&&s.t>s.until){ s.avail=false; s.sub='none'; s.q=[]; if(s.fut==='pending') s.fut='error'; log('warn',`proxy: no offer for ${c.ttl} ms → time-to-live expired, service unavailable`); }
+  if(c.procMode==='POLL'&&s.t>=s.nPoll){ s.nPoll=s.t+c.pollPeriod; if(s.q.length){ log('api',`proxy: GetNewSamples() → ${s.q.length} sample${s.q.length>1?'s':''} (#${s.q.join(', #')})`); s.last=s.q[s.q.length-1]; s.q=[]; } } },
+ render(v,c,R,M,P){ const set=(k,x)=>{ if(R[k]&&R[k].textContent!==String(x)) R[k].textContent=x; }, cls=(k,x)=>{ if(R[k]&&R[k].className!==x) R[k].className=x; };
+  set('off',v.offered?'OFFERED':'NOT OFFERED'); cls('off','pill '+(v.offered?'good':'')); set('subs',v.subs?'1':'0'); set('evn',v.ev); set('pend',v.pend.length);
+  set('av',v.avail?'AVAILABLE':'NOT AVAILABLE'); cls('av','pill '+(v.avail?'good':'bad'));
+  set('ss',{none:'kNotSubscribed',pending:'kSubscriptionPending',ok:'kSubscribed'}[v.sub]); cls('ss','pill '+(v.sub==='ok'?'good':v.sub==='pending'?'warn':''));
+  let qh=''; for(let i=0;i<c.maxSamples;i++) qh+=`<span class="${v.q[i]!=null?'f':''}">${v.q[i]!=null?v.q[i]:''}</span>`; if(R.q.innerHTML!==qh) R.q.innerHTML=qh;
+  set('last',v.last?'#'+v.last:'none'); set('drop',v.drop);
+  set('fut',{idle:'not called',pending:'future pending',ready:'future ready',error:'error: service not available'}[v.fut]); cls('fut','pill '+({pending:'warn',ready:'good',error:'bad'}[v.fut]||''));
+  cls('lane','lane'+(c.linkDown?' down':''));
+  R.chips.innerHTML=v.msgs.map(m=>{ const p=Math.min(1,(v.t-m.t0)/c.netLatency), x=8+84*(m.dir>0?p:1-p), row=m.k==='Ev'?1:(m.k==='Req'||m.k==='Resp')?2:0;
+    return `<i class="chip${m.lost?' bad':m.dir<0?' alt':''}" style="left:${x}%;top:${row*77+30}px">${m.k==='Ev'?'#'+m.n:m.k}</i>`; }).join(''); },
+ api:{'skeleton.OfferService':{ex:'skeleton.OfferService()',fn(s,c,log){ s.offered=true; s.nOffer=s.t; log('api','skeleton.OfferService()'); return 'offering'; }},
+  'skeleton.StopOfferService':{ex:'skeleton.StopOfferService()',fn(s,c,log){ if(!s.offered) return 'already stopped'; s.offered=false; s.subs=false; s.pend=[]; log('api','skeleton.StopOfferService()'); a2send(s,c,log,'StopOffer',1); return 'stopped'; }},
+  'proxy.Subscribe':{ex:'proxy.Subscribe(4)',fn(s,c,log,a,set){ if(a[0]) set('maxSamples',+a[0]); s.want=true; if(s.avail&&s.sub==='none'){ s.sub='pending'; a2send(s,c,log,'Sub',-1); } log('api',`proxy: event.Subscribe(${c.maxSamples})`); return s.avail?'subscribing':'will subscribe when the service is found'; }},
+  'proxy.Unsubscribe':{ex:'proxy.Unsubscribe()',fn(s,c,log){ s.want=false; s.sub='none'; s.q=[]; a2send(s,c,log,'Unsub',-1); log('api','proxy: event.Unsubscribe()'); return 'unsubscribed'; }},
+  'proxy.Calibrate':{ex:'proxy.Calibrate()',fn(s,c,log){ if(!s.avail){ s.fut='error'; log('err','proxy.Calibrate(): service not available, the future holds an error'); return 'error: service not available'; }
+    s.fut='pending'; s.rid++; a2send(s,c,log,'Req',-1,s.rid); log('api','proxy.Calibrate() → returns ara::core::Future, request sent'); return 'future pending'; }}}},
+{id:'adaptive-exec',plat:'adaptive',name:'3 · Execution and health',dt:20,rate:1000,
+ title:'Function group states and health supervision',
+ intro:'Execution Management starts and stops processes so that the set running matches the requested machine state, respecting dependencies. Platform Health Management counts alive checkpoints from brake_assist. Too few in a supervision cycle, for too many cycles, and a recovery action runs.',
+ tries:['Request Parking. Driving processes stop before parking ones start, in dependency order.','Inject a hang. After the tolerated failed cycles the supervision expires and brake_assist is restarted.','Set the recovery action to PARKING and hang again: the machine falls back to a degraded state.','Set the alive period to 300 ms without changing the supervision cycle. Which number has to change so the supervision still passes?'],
+ def:{startTime:500,stopTime:300,alivePeriod:100,supCycle:500,margin:1,failTol:2,recovery:'RESTART'},
+ fields:[{k:'recovery',l:'Recovery action',t:'s',o:['RESTART','PARKING','NONE']},{k:'alivePeriod',l:'Alive checkpoint period',t:'r',min:40,max:500,st:20,u:'ms'},
+  {k:'supCycle',l:'Supervision cycle',t:'r',min:200,max:2000,st:100,u:'ms'},{k:'expected',l:'Expected alive indications per cycle',t:'r',min:1,max:20,st:1,u:''},
+  {k:'margin',l:'Allowed margin',t:'r',min:0,max:3,st:1,u:''},{k:'failTol',l:'Tolerated failed cycles',t:'r',min:0,max:5,st:1,u:''},
+  {k:'startTime',l:'Process start time',t:'r',min:100,max:1500,st:100,u:'ms'},{k:'stopTime',l:'Process stop time',t:'r',min:100,max:1000,st:100,u:'ms'}],
+ html:()=>`<div class="fg"><b>MachineFG state</b><span class="pill" data-r="fg"></span>
+   ${['Off','Startup','Driving','Parking'].map(x=>`<button data-act="SetState(${x})">SetState(${x})</button>`).join('')}</div>
+  <div class="procs">${PR.map(p=>`<div class="proc" data-m="P_${p.n}"><b>${p.n}</b><small>runs in ${p.in.join(', ')}${p.dep.length?' · needs '+p.dep.join(', '):''}</small><span><span class="pill" data-r="S_${p.n}"></span></span><div class="meter"><i data-r="B_${p.n}"></i></div></div>`).join('')}</div>
+  <h4 style="margin-top:14px;font-size:16px">Health supervision of brake_assist</h4>
+  <dl class="kv" style="margin-top:6px"><dt>Status</dt><dd><span class="pill" data-r="sup"></span></dd><dt>Alive this cycle</dt><dd data-r="al"></dd><dt>Cycle progress</dt><dd><div class="meter"><i data-r="cyc"></i></div></dd><dt>Failed cycles</dt><dd data-r="fc"></dd><dt>Restarts</dt><dd data-r="rs"></dd></dl>
+  <div class="acts"><button data-act="InjectHang()">InjectHang() · brake_assist stops reporting</button><button data-act="Kill(radar_service)">Kill(radar_service) · crash</button><button data-act="ReportCheckpoint()">ReportCheckpoint()</button></div>
+  <p class="note">Simplified: one function group, and recovery restarts a single process. Real platforms have many function groups, and State Management decides the recovery.</p>`,
+ init:c=>({t:0,target:'Driving',fg:'Driving',ps:PR.map(p=>({st:p.in.includes('Driving')?'running':'idle',tm:0})),alive:0,nAlive:c.alivePeriod,nSup:c.supCycle,failed:0,sup:'OK',hung:false,restarts:0}),
+ step(s,c,dt,log){ s.t+=dt; let settled=true;
+  PR.forEach((p,i)=>{ const P=s.ps[i], want=p.in.includes(s.target);
+    if(P.st==='starting'){ P.tm-=dt; if(P.tm<=0){ P.st='running'; log('api',`${p.n}: ReportExecutionState(kRunning)`); if(i===BA){ s.alive=0; s.failed=0; s.sup='OK'; s.hung=false; s.nAlive=s.t+c.alivePeriod; s.nSup=s.t+c.supCycle; } } }
+    else if(P.st==='terminating'){ P.tm-=dt; if(P.tm<=0){ P.st='idle'; log('info',`${p.n} exited`); } }
+    else if(P.st==='running'&&!want){ if(!PR.some((q,j)=>q.dep.includes(p.n)&&s.ps[j].st!=='idle')){ P.st='terminating'; P.tm=c.stopTime; log('api',`Execution Management: SIGTERM → ${p.n}`); } }
+    else if(P.st==='idle'&&want){ if(p.dep.every(d=>s.ps[PR.findIndex(q=>q.n===d)].st==='running')){ P.st='starting'; P.tm=c.startTime; log('api',`Execution Management: start ${p.n} (dependencies are running)`); } }
+    if((want&&P.st!=='running')||(!want&&P.st!=='idle')) settled=false; });
+  if(settled&&s.fg!==s.target){ s.fg=s.target; log('info',`MachineFG reached ${s.target}; the SetState() future resolves`); }
+  const B=s.ps[BA];
+  if(B.st==='running'){ if(!s.hung&&s.t>=s.nAlive){ s.nAlive=s.t+c.alivePeriod; s.alive++; }
+    if(s.t>=s.nSup){ const ok=Math.abs(s.alive-c.expected)<=c.margin; const got=s.alive; s.alive=0; s.nSup=s.t+c.supCycle;
+      if(ok){ if(s.sup!=='OK') log('info','Health Management: alive supervision back to OK'); s.failed=0; s.sup='OK'; }
+      else{ s.failed++; s.sup=s.failed>c.failTol?'EXPIRED':'FAILED'; log('warn',`Health Management: ${got} alive indications, expected ${c.expected} ± ${c.margin} → ${s.sup} (${s.failed} failed cycle${s.failed>1?'s':''})`);
+        if(s.sup==='EXPIRED'){ if(c.recovery==='RESTART'){ B.st='terminating'; B.tm=c.stopTime; s.restarts++; log('err','Recovery: State Management restarts brake_assist'); }
+          else if(c.recovery==='PARKING'&&s.target!=='Parking'){ s.target='Parking'; log('err','Recovery: State Management requests the degraded state Parking'); } } } } }
+  else s.sup='off'; },
+ render(v,c,R,M,P){ const set=(k,x)=>{ if(R[k]&&R[k].textContent!==String(x)) R[k].textContent=x; }, cls=(k,x)=>{ if(R[k]&&R[k].className!==x) R[k].className=x; };
+  set('fg',v.fg===v.target?v.fg:`${v.fg} → ${v.target}`); cls('fg','pill '+(v.fg===v.target?'good':'warn'));
+  PR.forEach((p,i)=>{ const S=v.ps[i]; set('S_'+p.n,S.st); cls('S_'+p.n,'pill '+({running:'good',starting:'warn',terminating:'warn'}[S.st]||'')); const m=M['P_'+p.n]; const cn='proc '+S.st; if(m.className!==cn) m.className=cn;
+    R['B_'+p.n].style.width=(S.st==='starting'?100-S.tm/c.startTime*100:S.st==='terminating'?S.tm/c.stopTime*100:S.st==='running'?100:0)+'%'; });
+  set('sup',v.sup==='off'?'not supervised (process not running)':v.sup+(v.hung?' · process is hung':'')); cls('sup','pill '+({OK:'good',FAILED:'warn',EXPIRED:'bad'}[v.sup]||''));
+  set('al',`${v.alive} · expected ${c.expected} ± ${c.margin}`); R.cyc.style.width=(v.sup==='off'?0:Math.max(0,Math.min(100,100-(v.nSup-v.t)/c.supCycle*100)))+'%';
+  set('fc',`${v.failed} · tolerated ${c.failTol}`); set('rs',v.restarts); },
+ api:{'SetState':{ex:'SetState(Parking)',fn(s,c,log,a){ const x=String(a[0]); if(!['Off','Startup','Driving','Parking'].includes(x)) throw Error('States are Off, Startup, Driving and Parking.'); s.target=x; log('api',`State Management: StateClient::SetState(MachineFG::${x})`); return 'transition requested'; }},
+  'InjectHang':{ex:'InjectHang()',fn(s,c,log){ if(s.ps[BA].st!=='running') throw Error('brake_assist is not running. Request Driving first.'); s.hung=true; log('warn','brake_assist hangs: no more ReportCheckpoint() calls'); return 'hang injected'; }},
+  'ReportCheckpoint':{ex:'ReportCheckpoint()',fn(s,c,log){ s.alive++; log('api','brake_assist: SupervisedEntity::ReportCheckpoint(alive)'); return 'checkpoint reported'; }},
+  'Kill':{ex:'Kill(radar_service)',fn(s,c,log,a){ const i=PR.findIndex(p=>p.n===String(a[0])); if(i<0) throw Error('Unknown process name.'); if(s.ps[i].st==='idle') return 'not running';
+    s.ps[i].st='idle'; log('err',`${PR[i].n} terminated unexpectedly; Execution Management restarts it because the state still needs it`); return 'killed'; }}}}
+];
+LEVELS.find(l=>l.id==='adaptive-exec').def.expected=5;
+
+/* ---------- runtime ---------- */
+let L,cfg,S,hist=[],logs=[],idx=0,mode='run',speed=1,acc=0,last=0,R={},M={},cv=null,traceKey='';
+const cfgs={};
+function log(k,m){ logs.push({t:S.t,k,m}); if(logs.length>1500) logs.splice(0,300); }
+function fork(){ if(idx<hist.length-1){ hist.length=idx+1; S=clone(hist[idx]); logs=logs.filter(x=>x.t<=S.t); } }
+function commit(){ hist[hist.length-1]=clone(S); idx=hist.length-1; }
+function stepOnce(){ fork(); L.step(S,cfg,L.dt,log); hist.push(clone(S)); if(hist.length>6000) hist.shift(); idx=hist.length-1; }
+function field(k){ return (L.fields||[]).find(f=>f.k===k); }
+function coerce(f,v){ if(f.t==='b'){ if(v===true||v===false) return v; if(v===1||v==='1'||v==='true') return true; if(v===0||v==='0'||v==='false') return false; throw Error(`${f.k} must be true or false.`); }
+  if(f.t==='s'){ const u=String(v).toUpperCase(); if(!f.o.includes(u)) throw Error(`${f.k} must be one of ${f.o.join(', ')}.`); return u; }
+  const n=Number(v); if(!isFinite(n)) throw Error(`${f.k} must be a number.`); return Math.max(f.min,Math.min(f.max,Math.round(n/f.st)*f.st)); }
+function setCfg(k,v,quiet){ const f=field(k); if(!f) throw Error(`No setting called ${k}. Open the Config file tab to see the names.`);
+  const x=coerce(f,v); if(cfg[k]===x) return x; fork(); cfg[k]=x; if(!quiet) log('info',`Config: ${k} = ${x}`); commit(); syncCtl(); return x; }
+function exec(str){ const m=/^\s*([\w.:]+)\s*\((.*)\)\s*;?\s*$/.exec(str); if(!m) throw Error('Write a call like Name(argument).');
+  if(m[1]==='Set'){ const p=m[2].split(','); if(p.length<2) throw Error('Use Set(key, value).'); const x=setCfg(p[0].trim().replace(/['"]/g,''),p.slice(1).join(',').trim().replace(/['"]/g,'')); return `set to ${x}`; }
+  const a=L.api&&L.api[m[1]]; if(!a) throw Error(`${m[1]} is not available on this level.`);
+  fork(); const args=a.raw?m[2]:m[2].split(',').map(x=>x.trim().replace(/^['"]|['"]$/g,'')).filter(x=>x!=='').map(x=>/^(0x[0-9a-f]+|-?\d+(\.\d+)?)$/i.test(x)?Number(x):x);
+  const r=a.fn(S,cfg,log,args,(k,v)=>{ cfg[k]=coerce(field(k),v); syncCtl(); }); commit(); return r; }
+const $=s=>document.querySelector(s);
+function syncCtl(){ (L.fields||[]).forEach(f=>{ const e=document.getElementById('f_'+f.k); if(!e) return; if(f.t==='b') e.checked=cfg[f.k]; else e.value=cfg[f.k];
+    const o=document.getElementById('o_'+f.k); if(o) o.textContent=cfg[f.k]+(f.u?' '+f.u:''); });
+  if(document.activeElement!==$('#cfgText')) $('#cfgText').value=JSON.stringify(cfg,null,2); }
+function say(el,txt,ok){ el.textContent=txt; el.className='msg '+(ok?'ok':'err'); }
+function run(str,el){ try{ const r=exec(str); if(el) say(el,`${str.trim()} → ${r}`,true); } catch(e){ if(el) say(el,e.message,false); else { fork(); log('err',e.message); commit(); } } }
+function buildUI(){
+  document.body.classList.toggle('static',!!L.static);
+  $('#pClassic').classList.toggle('on',L.plat==='classic'); $('#pAdaptive').classList.toggle('on',L.plat==='adaptive');
+  $('#levels').innerHTML=LEVELS.filter(l=>l.plat===L.plat).map(l=>`<button data-l="${l.id}" class="${l.id===L.id?'on':''}">${l.name}</button>`).join('');
+  $('#lesson').innerHTML=`<span class="tag">${L.plat==='classic'?'Classic Platform':'Adaptive Platform'} · level ${L.name.split(' · ')[0]}</span><h2>${L.title}</h2><p>${L.intro}</p><ul>${L.tries.map(t=>`<li>${t}</li>`).join('')}</ul>`;
+  const st=$('#stage');
+  if(L.static){ st.innerHTML=mapHtml(L.layers); showInfo(L.first); return; }
+  st.innerHTML=L.html(); R={}; M={}; st.querySelectorAll('[data-r]').forEach(e=>R[e.dataset.r]=e); st.querySelectorAll('[data-m]').forEach(e=>M[e.dataset.m]=e); cv=st.querySelector('canvas[data-c]');
+  $('#paneCtl').innerHTML=L.fields.map(f=>f.t==='b'?`<div class="field chk"><input type="checkbox" id="f_${f.k}" data-k="${f.k}"><label for="f_${f.k}">${f.l}</label></div>`:
+    f.t==='s'?`<div class="field"><label for="f_${f.k}">${f.l}</label><span></span><select id="f_${f.k}" data-k="${f.k}">${f.o.map(o=>`<option>${o}</option>`).join('')}</select></div>`:
+    `<div class="field"><label for="f_${f.k}">${f.l}</label><output id="o_${f.k}"></output><input type="range" id="f_${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.st}"></div>`).join('');
+  $('#cfgNote').textContent=L.plat==='classic'?'On a real Classic ECU these values live in ARXML, are generated into C code, and cannot change while the ECU runs. Here you can edit them live.':'On the Adaptive Platform values like these live in manifests that are read when the machine or process starts. Here you can edit them live.';
+  $('#apis').innerHTML=`<button data-ex="Set(${L.fields[0].k}, ${cfg[L.fields[0].k]})">Set(key, value) · change any setting</button>`+Object.values(L.api).map(a=>`<button data-ex="${a.ex}">${a.ex}</button>`).join('');
+  $('#cmdMsg').textContent=''; $('#cfgMsg').textContent=''; syncCtl();
+}
+function showInfo(n){ const i=L.info[n]; if(!i) return; document.querySelectorAll('[data-i]').forEach(b=>b.classList.toggle('on',b.dataset.i===n));
+  const go=i[2]?LEVELS.find(l=>l.id===i[2]):null;
+  $('#detail').innerHTML=`<h3>${n}</h3><p>${i[0]}</p><p><b>Typical calls:</b> <code>${i[1]}</code></p>${go?`<button data-l="${go.id}">See it running in level ${go.name}</button>`:''}`; }
+function reset(){ if(L.static) return; S=L.init(cfg); hist=[clone(S)]; logs=[]; idx=0; acc=0; mode='run'; traceKey=''; }
+function enter(id){ L=LEVELS.find(l=>l.id===id)||LEVELS[1]; cfg=cfgs[L.id]||(cfgs[L.id]=clone(L.def||{})); buildUI(); reset();
+  try{ if(location.hash.slice(1)!==L.id) location.hash=L.id; }catch(e){} }
+function paint(tk,on,vals){ for(const k in M){ const e=M[k], t=e.querySelector('.tok'); const h=tk[k]||''; if(t&&t.innerHTML!==h) t.innerHTML=h; e.classList.toggle('on',!!(h||on[k])); }
+  for(const k in vals){ if(R[k]&&R[k].textContent!==String(vals[k])) R[k].textContent=vals[k]; } }
+function fmt(t){ return L.unit==='ms'?t+' ms':(t/1000).toFixed(2)+' s'; }
+function draw(){ const v=hist[idx]; L.render(v,cfg,R,M,paint);
+  if(cv&&L.chart){ const d=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight; if(cv.width!==Math.round(w*d)){ cv.width=Math.round(w*d); cv.height=Math.round(h*d); }
+    const g=cv.getContext('2d'),cs=getComputedStyle(document.documentElement),c=n=>cs.getPropertyValue(n).trim();
+    g.setTransform(d,0,0,d,0,0); g.clearRect(0,0,w,h); L.chart(g,w,h,hist,idx,{a:c('--accent'),a2:c('--accent2'),line:c('--line'),muted:c('--muted'),ink:c('--ink'),warn:c('--warn'),bad:c('--bad')}); }
+  const sc=$('#scrub'); sc.max=hist.length-1; if(document.activeElement!==sc||mode!=='pause') sc.value=idx;
+  $('#tLab').textContent=fmt(v.t); const live=idx===hist.length-1; const b=$('#badge'); b.textContent=mode==='replay'?'REPLAY':live?(mode==='run'?'LIVE':'PAUSED'):'RECORDED'; b.className='pill '+(mode==='replay'?'warn':live&&mode==='run'?'good':'');
+  $('#bRun').textContent=mode==='run'?'Pause':(live?'Run':'Run from here'); $('#bRun').classList.toggle('on',mode==='run');
+  let n=logs.length; while(n>0&&logs[n-1].t>v.t) n--; const key=n+'|'+(n?logs[n-1].t+logs[n-1].m:'');
+  if(key!==traceKey){ traceKey=key; $('#trace').innerHTML=logs.slice(Math.max(0,n-80),n).reverse().map(x=>`<li class="${x.k}"><time>${fmt(x.t)}</time>${x.m}</li>`).join('')||'<li>Nothing has happened yet.</li>'; } }
+function frame(ts){ const d=Math.min(100,ts-last); last=ts;
+  if(L&&!L.static){
+    if(mode==='run'){ acc+=d*speed*L.rate/1000; let n=0; while(acc>=L.dt&&n<300){ stepOnce(); acc-=L.dt; n++; } if(n>=300) acc=0; }
+    else if(mode==='replay'){ acc+=d*speed*L.rate/1000; while(acc>=L.dt){ acc-=L.dt; if(idx<hist.length-1) idx++; else{ mode='pause'; acc=0; break; } } }
+    draw(); }
+  requestAnimationFrame(frame); }
+function boot(){
+  document.addEventListener('click',e=>{ const t=e.target.closest('button'); if(!t) return;
+    if(t.dataset.p){ enter(LEVELS.find(l=>l.plat===t.dataset.p&&!l.static).id); }
+    else if(t.dataset.l){ enter(t.dataset.l); window.scrollTo(0,0); }
+    else if(t.dataset.i){ showInfo(t.dataset.i); }
+    else if(t.dataset.act){ run(t.dataset.act,null); }
+    else if(t.dataset.ex){ $('#cmd').value=t.dataset.ex; $('#cmd').focus(); }
+    else if(t.dataset.t){ ['ctl','cfg','api'].forEach(k=>{ $('#pane'+k[0].toUpperCase()+k.slice(1)).hidden=k!==t.dataset.t; $('#tab'+k[0].toUpperCase()+k.slice(1)).classList.toggle('on',k===t.dataset.t); }); syncCtl(); } });
+  $('#paneCtl').addEventListener('input',e=>{ const k=e.target.dataset.k; if(!k) return; try{ setCfg(k,e.target.type==='checkbox'?e.target.checked:e.target.value); }catch(er){} });
+  $('#cfgApply').onclick=()=>{ let o; try{ o=JSON.parse($('#cfgText').value); }catch(e){ return say($('#cfgMsg'),'This is not valid JSON. Check the commas and quotes.',false); }
+    const bad=Object.keys(o).filter(k=>!field(k)); if(bad.length) return say($('#cfgMsg'),`Unknown setting: ${bad.join(', ')}. Remove it and apply again.`,false);
+    try{ let n=0; for(const k in o){ const b=cfg[k]; if(setCfg(k,o[k])!==b) n++; } $('#cfgText').value=JSON.stringify(cfg,null,2); say($('#cfgMsg'),n?`${n} setting${n>1?'s':''} changed.`:'No changes.',true); }catch(e){ say($('#cfgMsg'),e.message,false); } };
+  $('#cfgReset').onclick=()=>{ for(const k in L.def){ try{ setCfg(k,L.def[k]); }catch(e){} } $('#cfgText').value=JSON.stringify(cfg,null,2); say($('#cfgMsg'),'Defaults restored.',true); };
+  $('#cmd').addEventListener('keydown',e=>{ if(e.key==='Enter') run($('#cmd').value,$('#cmdMsg')); });
+  $('#bRun').onclick=()=>{ mode=mode==='run'?'pause':'run'; acc=0; };
+  $('#bReplay').onclick=()=>{ if(idx>=hist.length-1) idx=0; mode='replay'; acc=0; };
+  $('#bBack').onclick=()=>{ mode='pause'; if(idx>0) idx--; };
+  $('#bFwd').onclick=()=>{ mode='pause'; if(idx<hist.length-1) idx++; else stepOnce(); };
+  $('#scrub').addEventListener('input',e=>{ mode='pause'; idx=Math.min(hist.length-1,+e.target.value); });
+  $('#speed').onchange=e=>{ speed=+e.target.value; };
+  $('#bReset').onclick=()=>reset();
+  window.addEventListener('hashchange',()=>{ const id=location.hash.slice(1); if(id&&id!==L.id&&LEVELS.some(l=>l.id===id)) enter(id); });
+  $('#tabCtl').classList.add('on');
+  const h=location.hash.slice(1); enter(LEVELS.some(l=>l.id===h)?h:'classic-signal');
+  requestAnimationFrame(frame);
+}
+if(typeof document!=='undefined') boot();
+</script>
+</body>
+</html>
